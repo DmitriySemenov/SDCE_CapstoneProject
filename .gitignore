@@ -4,3 +4,7 @@ build
 devel
 
 profile.tmp
+.vscode/settings.json
+data/dbw_test.rosbag.bag
+data/traffic_light_bag_file/.zip
+data/traffic_light_bag_file/traffic_light_training.bag
