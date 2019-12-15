@@ -19,7 +19,7 @@ class Controller(object):
         ki_th = 0.1
         kd_th = 0.0
         th_min = 0.0
-        th_max = 0.3
+        th_max = 0.4
         self.throttle_controller = PID(kp_th, ki_th, kd_th, th_min, th_max)
 
         tau = 0.5  # 1/(2pi*tau) = cutoff frequency
