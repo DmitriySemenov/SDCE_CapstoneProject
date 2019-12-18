@@ -18,10 +18,11 @@ import time
 STATE_COUNT_THRESHOLD = 3
 USE_IMG_CLASSIF = False
 SAVE_IMGS = True
+SAVE_FREQ = 10
 LOG_FREQ = 10
-MAX_WP_DIFF_LOG = 50
+MAX_WP_DIFF_LOG = 100
 DEBUG_EN = True
-LOOP_RATE = 50 # Loop rate in Hz
+LOOP_RATE = 10 # Loop rate in Hz
 
 class TLDetector(object):
     def __init__(self):
@@ -180,7 +181,7 @@ class TLDetector(object):
 
         #Save some image data for training, if close enough
         
-        if (SAVE_IMGS and self.has_image and (self.proc_count % LOG_FREQ == 0) and diff < MAX_WP_DIFF_LOG):
+        if (SAVE_IMGS and self.has_image and (self.proc_count % SAVE_FREQ == 0) and diff < MAX_WP_DIFF_LOG):
             save_file = "../../../imgs/{}-{:.0f}.jpeg".format(self.light_to_string(light_class), (time.time() * 100))
             cv2.imwrite(save_file, cv_image)
 
