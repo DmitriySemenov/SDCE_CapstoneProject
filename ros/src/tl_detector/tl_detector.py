@@ -15,14 +15,21 @@ import numpy as np
 import math
 import time
 
-STATE_COUNT_THRESHOLD = 3
-USE_IMG_CLASSIF = False
-SAVE_IMGS = True
+STATE_COUNT_THRESHOLD = 2
+USE_IMG_CLASSIF = True
+SAVE_IMGS = False
 SAVE_FREQ = 10
-LOG_FREQ = 10
-MAX_WP_DIFF_LOG = 100
+LOG_FREQ = 2 # Log frequency divider
+MAX_WP_DIFF = 100
+MIN_WP_DIFF = 1
 DEBUG_EN = True
-LOOP_RATE = 10 # Loop rate in Hz
+LOOP_RATE = 5 # Loop rate in Hz
+SCORE_THRESH = 0.4
+
+TF_CLASS_GREEN = 1
+TF_CLASS_RED = 2
+TF_CLASS_YELLOW = 3
+TF_CLASS_UNKNOWN = 4
 
 class TLDetector(object):
     def __init__(self):
@@ -163,25 +170,49 @@ class TLDetector(object):
             int: ID of traffic light color (specified in styx_msgs/TrafficLight)
 
         """
-        light_class = TrafficLight.UNKNOWN
+        light_class = self.last_state
 
-        if(self.has_image):
-            cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+        if (diff < MAX_WP_DIFF and diff > MIN_WP_DIFF):
+            if(self.has_image):
+                cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
 
-        if (USE_IMG_CLASSIF):
-            if(not self.has_image):
-                self.prev_light_loc = None
-                return False
+            if (USE_IMG_CLASSIF):
+                if(not self.has_image):
+                    self.prev_light_loc = None
+                    return False
+                    
+                #Get classification
+                red_count = 0
+                green_count = 0
+                yellow_count = 0
+                light_count = 0
+                [boxes, scores, classes, num] = self.light_classifier.get_classification(cv_image)
                 
-            #Get classification
-            light_class = self.light_classifier.get_classification(cv_image)
+                for i in range(num):
+                    if scores[i] >= SCORE_THRESH:
+                        light_count += 1
+                        if classes[i] == TF_CLASS_RED:
+                            red_count += 1
+                        elif classes[i] == TF_CLASS_GREEN:
+                            green_count += 1
+                        elif classes[i] == TF_CLASS_YELLOW:
+                            yellow_count += 1
 
-        else:
-            light_class = light.state
+                if (light_count >= 1):
+                    if red_count >= 1:
+                        light_class = TrafficLight.RED
+                    elif green_count >= 1:
+                        light_class = TrafficLight.GREEN
+                    elif yellow_count >= 1:
+                        light_class = TrafficLight.YELLOW
+
+                if (DEBUG_EN and (self.proc_count % LOG_FREQ == 0)):
+                    rospy.logwarn("TF: Class={}, Light#={}, Red#={}, Yellow#={}, Green#={}".format(light_class, light_count, red_count, yellow_count, green_count))
+            else:
+                light_class = light.state
 
         #Save some image data for training, if close enough
-        
-        if (SAVE_IMGS and self.has_image and (self.proc_count % SAVE_FREQ == 0) and diff < MAX_WP_DIFF_LOG):
+        if (SAVE_IMGS and self.has_image and (self.proc_count % SAVE_FREQ == 0) and diff < MAX_WP_DIFF and diff > MIN_WP_DIFF):
             save_file = "../../../imgs/{}-{:.0f}.jpeg".format(self.light_to_string(light_class), (time.time() * 100))
             cv2.imwrite(save_file, cv_image)
 
@@ -223,8 +254,8 @@ class TLDetector(object):
             self.proc_count += 1
             state = self.get_light_state(closest_light, diff)
             
-            if (DEBUG_EN and (self.proc_count % LOG_FREQ == 0)):
-                rospy.logwarn("CarIdx={}, StopLineIdx={}, diff={}, state={}".format(car_wp_idx, line_wp_idx, diff, self.light_to_string(state)))
+            #if (DEBUG_EN and (self.proc_count % LOG_FREQ == 0)):
+            #    rospy.logwarn("CarIdx={}, StopLineIdx={}, diff={}, state={}".format(car_wp_idx, line_wp_idx, diff, self.light_to_string(state)))
             
             return line_wp_idx, state
 
