@@ -22,9 +22,11 @@ SAVE_FREQ = 10
 LOG_FREQ = 2 # Log frequency divider
 MAX_WP_DIFF = 100
 MIN_WP_DIFF = 1
+MIN_WP_DIFF_YELLOW = 10
 DEBUG_EN = True
 LOOP_RATE = 5 # Loop rate in Hz
 SCORE_THRESH = 0.4
+DEBUG_SITE_BAG = False
 
 TF_CLASS_GREEN = 1
 TF_CLASS_RED = 2
@@ -62,7 +64,9 @@ class TLDetector(object):
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
 
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifier()
+
+        tf_mdl_sim = rospy.get_param('~tf_mdl_sim')
+        self.light_classifier = TLClassifier(tf_mdl_sim)
         self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
@@ -83,8 +87,9 @@ class TLDetector(object):
         rate = rospy.Rate(LOOP_RATE)
         while not rospy.is_shutdown():
 
-            light_wp, state = self.process_traffic_lights()
-
+            light_wp, state, diff = self.process_traffic_lights()
+            if (DEBUG_SITE_BAG):
+                state = self.get_light_state(None, 75)
             '''
             Publish upcoming red lights at camera frequency.
             Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
@@ -96,7 +101,16 @@ class TLDetector(object):
                 self.state = state
             elif self.state_count >= STATE_COUNT_THRESHOLD:
                 self.last_state = self.state
-                light_wp = light_wp if state == TrafficLight.RED else -1
+                # Stop on Red. 
+                # Also, if light is yellow and car is far enough to stop, command stop
+                # Also check if stop due to yellow is in progress and continue to stop 
+                if (state == TrafficLight.RED or \
+                    (state == TrafficLight.YELLOW and diff > MIN_WP_DIFF_YELLOW) or \
+                        (state == TrafficLight.YELLOW and self.last_wp == light_wp)):
+                    light_wp = light_wp
+                else: 
+                    light_wp = -1
+                    
                 self.last_wp = light_wp
                 self.upcoming_red_light_pub.publish(Int32(light_wp))
             else:
@@ -213,7 +227,11 @@ class TLDetector(object):
 
         #Save some image data for training, if close enough
         if (SAVE_IMGS and self.has_image and (self.proc_count % SAVE_FREQ == 0) and diff < MAX_WP_DIFF and diff > MIN_WP_DIFF):
-            save_file = "../../../imgs/{}-{:.0f}.jpeg".format(self.light_to_string(light_class), (time.time() * 100))
+            if (DEBUG_SITE_BAG):
+                save_file = "../../../imgs/Real/{}-{:.0f}.jpeg".format('site', (time.time() * 100))
+            else:
+                save_file = "../../../imgs/Sim/{}-{:.0f}.jpeg".format(self.light_to_string(light_class), (time.time() * 100))
+            
             cv2.imwrite(save_file, cv_image)
 
         return light_class
@@ -257,9 +275,9 @@ class TLDetector(object):
             #if (DEBUG_EN and (self.proc_count % LOG_FREQ == 0)):
             #    rospy.logwarn("CarIdx={}, StopLineIdx={}, diff={}, state={}".format(car_wp_idx, line_wp_idx, diff, self.light_to_string(state)))
             
-            return line_wp_idx, state
+            return line_wp_idx, state, diff
 
-        return -1, TrafficLight.UNKNOWN
+        return -1, TrafficLight.UNKNOWN, 9999
 
     def light_to_string(self, light):
         light_str = "unknown"

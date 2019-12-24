@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+import rospy
 from styx_msgs.msg import TrafficLight
 import numpy as np
 import tensorflow as tf
@@ -5,9 +7,15 @@ import os
 import cv2
 
 class TLClassifier(object):
-    def __init__(self):
+    def __init__(self, tf_mdl_sim):
         cwd = os.path.dirname(os.path.realpath(__file__))
-        PATH_TO_MODEL = os.path.join(cwd, "frozen_inference_graph_sim.pb")
+
+        if (tf_mdl_sim == 1):
+            PATH_TO_MODEL = os.path.join(cwd, "frozen_inference_graph_sim.pb")
+            rospy.logwarn("Using SIM TF model")
+        else:
+            PATH_TO_MODEL = os.path.join(cwd, "frozen_inference_graph_site.pb")
+            rospy.logwarn("Using SITE TF model")
 
         self.detection_graph = tf.Graph()
         with self.detection_graph.as_default():
